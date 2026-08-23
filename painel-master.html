@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Painel Master — Clientes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,600;0,700;1,500&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --paper:#FAF6EC; --paper-dim:#F1EADA; --ink:#211F1B; --ink-soft:#6B6558;
+    --bg:#14140F; --panel:#1C1B17; --stamp:#B4392C; --sage:#6E7A56; --amber:#C08A2E; --line:#37352C;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{ background:var(--bg); color:var(--paper); font-family:'Inter',sans-serif; min-height:100vh; }
+
+  .login-wrap{ min-height:100vh; display:flex; align-items:center; justify-content:center; padding:20px; }
+  .login-box{ background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:40px 36px; width:100%; max-width:360px; text-align:center; }
+  .login-box .stamp{ display:inline-block; border:2px solid var(--paper); border-radius:6px; padding:10px 20px; transform:rotate(-2deg); font-family:'Fraunces',serif; font-weight:700; font-size:18px; margin-bottom:26px; }
+  .login-box input{ width:100%; background:#0F0F0C; border:1px solid var(--line); color:var(--paper); padding:12px 14px; border-radius:8px; font-family:'IBM Plex Mono',monospace; font-size:14px; margin-bottom:12px; }
+  .login-box button{ width:100%; background:var(--stamp); color:var(--paper); border:none; padding:13px; border-radius:8px; font-family:'IBM Plex Mono',monospace; font-weight:700; letter-spacing:1px; font-size:13px; cursor:pointer; margin-top:6px; }
+  .login-error{ color:#E27C6F; font-family:'IBM Plex Mono',monospace; font-size:12.5px; margin-top:12px; display:none; }
+
+  .topbar{ display:flex; justify-content:space-between; align-items:center; padding:18px 26px; border-bottom:1px solid var(--line); }
+  .topbar .stamp{ display:inline-block; border:2px solid var(--paper); border-radius:6px; padding:7px 16px; transform:rotate(-2deg); font-family:'Fraunces',serif; font-weight:700; font-size:16px; }
+  .logout-btn{ background:none; border:1px solid var(--line); color:#B8B2A2; padding:8px 14px; border-radius:8px; font-family:'IBM Plex Mono',monospace; font-size:12px; cursor:pointer; }
+
+  .content{ max-width:1100px; margin:0 auto; padding:28px 20px 60px; }
+
+  .stats-row{ display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:28px; }
+  @media (max-width:700px){ .stats-row{ grid-template-columns:repeat(2,1fr); } }
+  .stat-card{ background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px 18px; }
+  .stat-card .num{ font-family:'Fraunces',serif; font-weight:700; font-size:26px; }
+  .stat-card .label{ font-family:'IBM Plex Mono',monospace; font-size:11px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.5px; margin-top:4px; }
+  .stat-card.ativo .num{ color:var(--sage); }
+  .stat-card.vencendo .num{ color:var(--amber); }
+  .stat-card.bloqueado .num{ color:var(--stamp); }
+
+  .toolbar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px; }
+  .toolbar h2{ font-family:'Fraunces',serif; font-size:20px; }
+  .btn{ padding:10px 18px; border-radius:8px; border:none; cursor:pointer; font-family:'IBM Plex Mono',monospace; font-weight:700; font-size:12.5px; letter-spacing:0.5px; }
+  .btn-primary{ background:var(--stamp); color:#fff; }
+  .btn-secondary{ background:transparent; border:1px solid var(--line) !important; color:var(--ink-soft); }
+  .btn-sage{ background:var(--sage); color:#fff; }
+
+  table{ width:100%; border-collapse:collapse; background:var(--panel); border-radius:12px; overflow:hidden; border:1px solid var(--line); }
+  th, td{ text-align:left; padding:12px 14px; border-bottom:1px solid var(--line); font-size:13.5px; }
+  th{ font-family:'IBM Plex Mono',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:0.5px; color:var(--ink-soft); background:#181713; }
+  tr:last-child td{ border-bottom:none; }
+  tr:hover td{ background:rgba(255,255,255,0.02); }
+
+  .badge{ display:inline-block; padding:3px 10px; border-radius:999px; font-size:11px; font-family:'IBM Plex Mono',monospace; }
+  .badge.ativo{ background:rgba(110,122,86,0.2); color:var(--sage); }
+  .badge.bloqueado{ background:rgba(180,57,44,0.2); color:#E27C6F; }
+  .badge.trial{ background:rgba(90,143,176,0.2); color:#7FB3D5; }
+  .badge.cancelado{ background:rgba(139,133,116,0.2); color:var(--ink-soft); }
+
+  .venc{ font-family:'IBM Plex Mono',monospace; font-size:12.5px; }
+  .venc.atrasado{ color:#E27C6F; font-weight:700; }
+  .venc.proximo{ color:var(--amber); }
+
+  .row-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .row-actions button{ background:none; border:none; cursor:pointer; font-family:'IBM Plex Mono',monospace; font-size:11.5px; text-decoration:underline; color:var(--ink-soft); padding:0; }
+  .row-actions button.danger{ color:var(--stamp); }
+  .row-actions button.ok{ color:var(--sage); }
+
+  .empty{ text-align:center; color:var(--ink-soft); font-family:'IBM Plex Mono',monospace; font-size:13px; padding:40px 0; }
+
+  /* MODAL */
+  .modal-overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.65); display:none; align-items:center; justify-content:center; z-index:50; padding:20px; }
+  .modal-overlay.open{ display:flex; }
+  .modal-box{ background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:26px; width:100%; max-width:460px; max-height:88vh; overflow-y:auto; }
+  .modal-box h3{ font-family:'Fraunces',serif; font-size:18px; margin-bottom:16px; }
+  .field{ margin-bottom:12px; }
+  .field label{ display:block; font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.5px; margin-bottom:5px; }
+  .field input, .field select, .field textarea{ width:100%; padding:10px 12px; border:1px solid var(--line); border-radius:7px; font-family:'Inter',sans-serif; font-size:14px; background:#0F0F0C; color:var(--paper); }
+  .field-row{ display:flex; gap:10px; }
+  .field-row .field{ flex:1; }
+  .modal-actions{ display:flex; gap:10px; margin-top:18px; }
+  .chave-box{ background:#0F0F0C; border:1px dashed var(--line); border-radius:8px; padding:12px; font-family:'IBM Plex Mono',monospace; font-size:12px; word-break:break-all; margin-bottom:14px; color:var(--amber); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+/* =========================================================
+   CONFIGURAÇÃO — dados do SEU projeto Supabase MASTER
+   (separado, não é de nenhum cliente)
+========================================================= */
+const SUPABASE_URL = "https://yeyewlwsxcfocgoftnpm.supabase.co/rest/v1/";
+const SUPABASE_ANON_KEY = "sb_secret_-WI2TUYscSyKnYzA6B1o1g_S3x_P-gh";
+/* ========================================================= */
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const app = document.getElementById("app");
+
+let clientes = [];
+let editandoId = null;
+let chaveGeradaParaMostrar = null;
+
+function formatBRL(v){ return Number(v || 0).toLocaleString('pt-BR', { style:'currency', currency:'BRL' }); }
+function formatData(d){ if (!d) return '-'; const [y,m,day] = d.split('-'); return `${day}/${m}/${y}`; }
+function diasParaVencer(d){
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const venc = new Date(d + "T00:00:00");
+  return Math.round((venc - hoje) / 86400000);
+}
+
+/* ---------------- LOGIN ---------------- */
+function renderLogin(msg){
+  app.innerHTML = `
+    <div class="login-wrap">
+      <div class="login-box">
+        <div class="stamp">Painel Master</div>
+        <input type="email" id="loginEmail" placeholder="e-mail" autocomplete="username"/>
+        <input type="password" id="loginSenha" placeholder="senha" autocomplete="current-password"/>
+        <button id="loginBtn">ENTRAR</button>
+        <div class="login-error" id="loginError">${msg || ''}</div>
+      </div>
+    </div>`;
+  if (msg) document.getElementById("loginError").style.display = "block";
+  document.getElementById("loginBtn").addEventListener("click", doLogin);
+  document.getElementById("loginSenha").addEventListener("keydown", e => { if (e.key === "Enter") doLogin(); });
+}
+
+async function doLogin(){
+  const email = document.getElementById("loginEmail").value.trim();
+  const senha = document.getElementById("loginSenha").value;
+  const { error } = await sb.auth.signInWithPassword({ email, password: senha });
+  if (error){ renderLogin("E-mail ou senha incorretos."); return; }
+  init();
+}
+
+async function checkSession(){
+  const { data } = await sb.auth.getSession();
+  if (data.session) init(); else renderLogin();
+}
+
+/* ---------------- DADOS ---------------- */
+async function carregarClientes(){
+  const { data, error } = await sb.from("clientes").select("*").order("nome_estabelecimento", { ascending:true });
+  if (error){ console.error(error); return; }
+  clientes = data || [];
+}
+
+async function init(){
+  await carregarClientes();
+  render();
+}
+
+/* ---------------- RENDER ---------------- */
+function render(){
+  const totalAtivos = clientes.filter(c => c.status === 'ativo').length;
+  const totalBloqueados = clientes.filter(c => c.status === 'bloqueado').length;
+  const totalVencendo = clientes.filter(c => c.status === 'ativo' && diasParaVencer(c.data_vencimento) <= 5 && diasParaVencer(c.data_vencimento) >= 0).length;
+  const receitaMensal = clientes.filter(c => c.status === 'ativo').reduce((s,c) => s + Number(c.valor_mensal || 0), 0);
+
+  app.innerHTML = `
+    <div class="topbar">
+      <div class="stamp">Painel Master</div>
+      <button class="logout-btn" id="logoutBtn">sair</button>
+    </div>
+    <div class="content">
+      <div class="stats-row">
+        <div class="stat-card ativo"><div class="num">${totalAtivos}</div><div class="label">Clientes ativos</div></div>
+        <div class="stat-card vencendo"><div class="num">${totalVencendo}</div><div class="label">Vencendo em 5 dias</div></div>
+        <div class="stat-card bloqueado"><div class="num">${totalBloqueados}</div><div class="label">Bloqueados</div></div>
+        <div class="stat-card"><div class="num">${formatBRL(receitaMensal)}</div><div class="label">Receita mensal ativa</div></div>
+      </div>
+
+      <div class="toolbar">
+        <h2>Clientes (${clientes.length})</h2>
+        <button class="btn btn-primary" id="novoClienteBtn">+ Novo cliente</button>
+      </div>
+
+      ${clientes.length === 0 ? `<div class="empty">Nenhum cliente cadastrado ainda.</div>` : `
+        <table>
+          <thead><tr><th>Estabelecimento</th><th>Status</th><th>Vencimento</th><th>Valor</th><th></th></tr></thead>
+          <tbody>
+            ${clientes.map(c => {
+              const dias = diasParaVencer(c.data_vencimento);
+              const vencClasse = dias < 0 ? 'atrasado' : (dias <= 5 ? 'proximo' : '');
+              return `
+                <tr>
+                  <td>
+                    <strong>${c.nome_estabelecimento}</strong><br/>
+                    <span style="font-size:11.5px; color:var(--ink-soft);">${c.responsavel || ''}${c.telefone ? ' · ' + c.telefone : ''}</span>
+                  </td>
+                  <td><span class="badge ${c.status}">${c.status}</span></td>
+                  <td class="venc ${vencClasse}">${formatData(c.data_vencimento)}${dias < 0 ? ` (${Math.abs(dias)}d atrasado)` : (dias <= 5 ? ` (${dias}d)` : '')}</td>
+                  <td>${formatBRL(c.valor_mensal)}/mês</td>
+                  <td class="row-actions">
+                    <button data-edit="${c.id}">editar</button>
+                    <button class="ok" data-pagamento="${c.id}">marcar pagamento</button>
+                    ${c.status === 'bloqueado'
+                      ? `<button class="ok" data-status="${c.id}" data-novo-status="ativo">desbloquear</button>`
+                      : `<button class="danger" data-status="${c.id}" data-novo-status="bloqueado">bloquear</button>`}
+                    <button class="danger" data-del="${c.id}">excluir</button>
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      `}
+    </div>
+
+    <div class="modal-overlay" id="modalOverlay">
+      <div class="modal-box" id="modalBox"></div>
+    </div>
+  `;
+
+  document.getElementById("logoutBtn").addEventListener("click", async () => { await sb.auth.signOut(); renderLogin(); });
+  document.getElementById("novoClienteBtn").addEventListener("click", () => abrirModalCliente(null));
+  document.querySelectorAll("[data-edit]").forEach(b => b.addEventListener("click", () => abrirModalCliente(b.dataset.edit)));
+  document.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => excluirCliente(b.dataset.del)));
+  document.querySelectorAll("[data-pagamento]").forEach(b => b.addEventListener("click", () => marcarPagamento(b.dataset.pagamento)));
+  document.querySelectorAll("[data-status]").forEach(b => b.addEventListener("click", () => mudarStatus(b.dataset.status, b.dataset.novoStatus)));
+}
+
+/* ---------------- MODAL CLIENTE ---------------- */
+function abrirModalCliente(id){
+  editandoId = id;
+  const c = id ? clientes.find(x => x.id === id) : null;
+  const box = document.getElementById("modalBox");
+
+  box.innerHTML = `
+    <h3>${c ? 'Editar cliente' : 'Novo cliente'}</h3>
+    ${!c ? `<div class="chave-box" id="chaveInfo">A chave de licença é gerada automaticamente ao salvar — você vai copiá-la depois para os arquivos desse cliente (index.html, delivery.html, painel.html, admin.html).</div>` : `
+      <div class="chave-box">Chave de licença: <strong>${c.chave_licenca}</strong></div>
+    `}
+    <div class="field"><label>Nome do estabelecimento</label><input id="fNome" value="${c?.nome_estabelecimento || ''}" placeholder="Ex: Pizzaria do João"/></div>
+    <div class="field-row">
+      <div class="field"><label>Responsável</label><input id="fResponsavel" value="${c?.responsavel || ''}"/></div>
+      <div class="field"><label>Telefone</label><input id="fTelefone" value="${c?.telefone || ''}"/></div>
+    </div>
+    <div class="field"><label>E-mail</label><input id="fEmail" value="${c?.email || ''}"/></div>
+    <div class="field-row">
+      <div class="field"><label>URL do Supabase (referência)</label><input id="fSupabaseUrl" value="${c?.supabase_url || ''}" placeholder="https://xxxx.supabase.co"/></div>
+    </div>
+    <div class="field"><label>URL do site (referência)</label><input id="fNetlifyUrl" value="${c?.netlify_url || ''}" placeholder="https://cliente.netlify.app"/></div>
+    <div class="field-row">
+      <div class="field"><label>Plano</label><input id="fPlano" value="${c?.plano || ''}" placeholder="Básico, Pro..."/></div>
+      <div class="field"><label>Valor mensal (R$)</label><input id="fValor" type="number" step="0.01" value="${c?.valor_mensal ?? ''}"/></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Status</label>
+        <select id="fStatus">
+          ${['trial','ativo','bloqueado','cancelado'].map(s => `<option value="${s}" ${c?.status === s ? 'selected' : ''}>${s}</option>`).join('')}
+        </select>
+      </div>
+      <div class="field"><label>Vencimento</label><input id="fVencimento" type="date" value="${c?.data_vencimento || ''}"/></div>
+    </div>
+    <div class="field"><label>Observações</label><textarea id="fObs" rows="2">${c?.observacoes || ''}</textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" id="salvarClienteBtn" style="flex:1;">Salvar</button>
+      <button class="btn btn-secondary" id="fecharModalBtn" style="flex:1;">Cancelar</button>
+    </div>
+  `;
+
+  document.getElementById("modalOverlay").classList.add("open");
+  document.getElementById("fecharModalBtn").addEventListener("click", fecharModal);
+  document.getElementById("salvarClienteBtn").addEventListener("click", salvarCliente);
+}
+
+function fecharModal(){
+  document.getElementById("modalOverlay").classList.remove("open");
+  editandoId = null;
+}
+
+async function salvarCliente(){
+  const nome = document.getElementById("fNome").value.trim();
+  if (!nome) return alert("Digite o nome do estabelecimento.");
+
+  const payload = {
+    nome_estabelecimento: nome,
+    responsavel: document.getElementById("fResponsavel").value.trim() || null,
+    telefone: document.getElementById("fTelefone").value.trim() || null,
+    email: document.getElementById("fEmail").value.trim() || null,
+    supabase_url: document.getElementById("fSupabaseUrl").value.trim() || null,
+    netlify_url: document.getElementById("fNetlifyUrl").value.trim() || null,
+    plano: document.getElementById("fPlano").value.trim() || null,
+    valor_mensal: parseFloat(document.getElementById("fValor").value) || 0,
+    status: document.getElementById("fStatus").value,
+    data_vencimento: document.getElementById("fVencimento").value || null,
+    observacoes: document.getElementById("fObs").value.trim() || null
+  };
+
+  const btn = document.getElementById("salvarClienteBtn");
+  btn.disabled = true; btn.textContent = "Salvando...";
+
+  if (editandoId){
+    const { error } = await sb.from("clientes").update(payload).eq("id", editandoId);
+    if (error){ alert("Erro: " + error.message); btn.disabled = false; btn.textContent = "Salvar"; return; }
+    fecharModal();
+    await carregarClientes();
+    render();
+  } else {
+    const { data, error } = await sb.from("clientes").insert(payload).select().single();
+    if (error){ alert("Erro: " + error.message); btn.disabled = false; btn.textContent = "Salvar"; return; }
+    fecharModal();
+    await carregarClientes();
+    render();
+    alert(`Cliente criado!\n\nChave de licença (copie para os arquivos desse cliente):\n\n${data.chave_licenca}`);
+  }
+}
+
+async function excluirCliente(id){
+  const c = clientes.find(x => x.id === id);
+  if (!confirm(`Excluir "${c?.nome_estabelecimento}"? Isso não apaga o Supabase/site dele, só o registro aqui.`)) return;
+  const { error } = await sb.from("clientes").delete().eq("id", id);
+  if (error) return alert("Erro: " + error.message);
+  await carregarClientes();
+  render();
+}
+
+async function mudarStatus(id, novoStatus){
+  const { error } = await sb.from("clientes").update({ status: novoStatus }).eq("id", id);
+  if (error) return alert("Erro: " + error.message);
+  await carregarClientes();
+  render();
+}
+
+async function marcarPagamento(id){
+  const c = clientes.find(x => x.id === id);
+  if (!c) return;
+  // conta 30 dias a partir do vencimento atual (se já passou, conta a partir de hoje)
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const vencAtual = c.data_vencimento ? new Date(c.data_vencimento + "T00:00:00") : hoje;
+  const base = vencAtual > hoje ? vencAtual : hoje;
+  base.setDate(base.getDate() + 30);
+  const novaData = base.toISOString().slice(0,10);
+
+  if (!confirm(`Marcar pagamento de "${c.nome_estabelecimento}"?\nNovo vencimento: ${formatData(novaData)}${c.status !== 'ativo' ? '\n(status também vai virar "ativo")' : ''}`)) return;
+
+  const { error } = await sb.from("clientes").update({ data_vencimento: novaData, status: 'ativo' }).eq("id", id);
+  if (error) return alert("Erro: " + error.message);
+  await carregarClientes();
+  render();
+}
+
+checkSession();
+</script>
+</body>
+</html>
